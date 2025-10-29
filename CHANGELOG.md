@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export command now uses default values from configuration when secrets are not found in source provider
 - Export command with `--force` flag now skips existence checks, enabling export to write-only providers
 
+### Added
+- GitHub Actions provider: Write-only secrets provider for GitHub Actions workflows.
+  Supports repository-level and environment-level secrets via the `gh` CLI.
+  Profile names map to environment names (default profile → repository-level secrets).
 ## [0.3.3] - 2025-09-10
 
 ### Fixed
