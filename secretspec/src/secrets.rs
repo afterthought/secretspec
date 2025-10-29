@@ -1282,6 +1282,174 @@ impl Secrets {
         Ok((temp_file, path_str))
     }
 
+    /// Exports secrets from the default provider to another provider
+    ///
+    /// This method copies all secrets defined in the specification from the
+    /// default provider configured in the global settings to the target provider.
+    /// By default, it skips secrets that already exist in the target provider
+    /// unless the force flag is set.
+    ///
+    /// # Arguments
+    ///
+    /// * `to_provider` - The provider specification to export to
+    /// * `force` - If true, overwrite existing secrets in the target provider
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the export completes (even if some secrets were not found)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The source provider cannot be initialized
+    /// - The target provider cannot be initialized
+    /// - Storage operations fail
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use secretspec::Secrets;
+    ///
+    /// let spec = Secrets::load().unwrap();
+    /// spec.export("dotenv://.env.production", false).unwrap();
+    /// ```
+    pub fn export(&self, to_provider: &str, force: bool) -> Result<()> {
+        // Get the "from" provider from global config (default)
+        let from_provider = self.get_provider(None)?;
+
+        // Resolve profile (checks env var, then global config, then defaults to "default")
+        let profile_display = self.resolve_profile_name(None);
+
+        // Create the "to" provider
+        let to_provider_instance = Box::<dyn ProviderTrait>::try_from(to_provider.to_string())?;
+
+        // Check if the target provider supports setting values
+        if !to_provider_instance.allows_set() {
+            return Err(SecretSpecError::ProviderOperationFailed(format!(
+                "Target provider '{}' is read-only and does not support setting values",
+                to_provider_instance.name()
+            )));
+        }
+
+        println!(
+            "Exporting secrets from {} to {} (profile: {}){}...\n",
+            from_provider.name().blue(),
+            to_provider.blue(),
+            profile_display.cyan(),
+            if force {
+                " [FORCE]".yellow().to_string()
+            } else {
+                String::new()
+            }
+        );
+
+        // Get the profile configuration
+        let _profile_config = self.config.profiles.get(&profile_display).ok_or_else(|| {
+            SecretSpecError::SecretNotFound(format!("Profile '{}' not found", profile_display))
+        })?;
+
+        let mut exported = 0;
+        let mut skipped = 0;
+        let mut not_found = 0;
+        let mut overwritten = 0;
+
+        // Collect all secrets to export - from current profile and default profile
+        // This ensures we can export secrets defined in default profile when using other profiles
+        let profile = self.resolve_profile(Some(&profile_display))?;
+
+        // Process each secret using proper profile resolution
+        for (name, config) in profile.into_iter() {
+            // First check if the secret exists in the "from" provider
+            match from_provider.get(&self.config.project.name, &name, &profile_display)? {
+                Some(value) => {
+                    // Secret exists in "from" provider, check if it exists in "to" provider
+                    match to_provider_instance.get(
+                        &self.config.project.name,
+                        &name,
+                        &profile_display,
+                    )? {
+                        Some(_) => {
+                            if force {
+                                // Overwrite the existing secret
+                                to_provider_instance.set(
+                                    &self.config.project.name,
+                                    &name,
+                                    &value,
+                                    &profile_display,
+                                )?;
+                                println!(
+                                    "{} {} - {} {}",
+                                    "✓".green(),
+                                    name,
+                                    config.description.as_deref().unwrap_or("No description"),
+                                    "(overwritten)".yellow()
+                                );
+                                overwritten += 1;
+                            } else {
+                                // Secret exists in "to" provider, skip it
+                                println!(
+                                    "{} {} - {} {}",
+                                    "○".yellow(),
+                                    name,
+                                    config.description.as_deref().unwrap_or("No description"),
+                                    "(already exists in target, skipped)".yellow()
+                                );
+                                skipped += 1;
+                            }
+                        }
+                        None => {
+                            // Secret doesn't exist in "to" provider, export it
+                            to_provider_instance.set(
+                                &self.config.project.name,
+                                &name,
+                                &value,
+                                &profile_display,
+                            )?;
+                            println!(
+                                "{} {} - {}",
+                                "✓".green(),
+                                name,
+                                config.description.as_deref().unwrap_or("No description")
+                            );
+                            exported += 1;
+                        }
+                    }
+                }
+                None => {
+                    // Secret doesn't exist in "from" provider, can't export
+                    println!(
+                        "{} {} - {} {}",
+                        "✗".red(),
+                        name,
+                        config.description.as_deref().unwrap_or("No description"),
+                        "(not found in source)".red()
+                    );
+                    not_found += 1;
+                }
+            }
+        }
+
+        println!(
+            "\nSummary: {} exported, {} overwritten, {} skipped, {} not found in source",
+            exported.to_string().green(),
+            overwritten.to_string().yellow(),
+            skipped.to_string().yellow(),
+            not_found.to_string().red()
+        );
+
+        if exported > 0 || overwritten > 0 {
+            println!(
+                "\n{} Successfully exported {} secrets from {} to {}",
+                "✓".green(),
+                exported + overwritten,
+                from_provider.name(),
+                to_provider
+            );
+        }
+
+        Ok(())
+    }
+
     /// Validates all secrets in the specification
     ///
     /// This method checks all secrets defined in the current profile (and default

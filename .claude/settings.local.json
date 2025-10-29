@@ -3,7 +3,10 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(jq:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "mcp__context7__resolve-library-id",
+      "Bash(gh secret set:*)",
+      "Bash(cargo run:*)"
     ],
     "deny": []
   }
