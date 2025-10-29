@@ -157,6 +157,52 @@ $ secretspec import dotenv:/home/user/old-project/.env
 - Copy secrets between different profiles or projects
 - Import existing environment variables into SecretSpec management
 
+### export
+Export secrets to another provider from your default provider.
+
+```bash
+secretspec export [OPTIONS] <TO_PROVIDER>
+```
+
+The source provider and profile are determined from your configuration. By default, secrets that already exist in the destination provider will be skipped unless the `--force` flag is used.
+
+**Arguments:**
+- `<TO_PROVIDER>` - Provider to export to (e.g., `dotenv:/path/to/.env`, `dotenv://.env.production`)
+
+**Options:**
+- `-f, --force` - Overwrite existing secrets in the target provider
+
+**Example:**
+```bash
+# Export from your default provider to a .env file
+$ secretspec export dotenv://.env.production
+Exporting secrets from keyring to dotenv://.env.production (profile: development)...
+
+✓ DATABASE_URL - Database connection string
+○ API_KEY - API key for external service (already exists in target, skipped)
+✗ REDIS_URL - Redis connection URL (not found in source)
+
+Summary: 1 exported, 0 overwritten, 1 skipped, 1 not found in source
+
+# Force overwrite existing secrets
+$ secretspec export dotenv://.env.production --force
+Exporting secrets from keyring to dotenv://.env.production (profile: development) [FORCE]...
+
+✓ DATABASE_URL - Database connection string
+✓ API_KEY - API key for external service (overwritten)
+✗ REDIS_URL - Redis connection URL (not found in source)
+
+Summary: 1 exported, 1 overwritten, 0 skipped, 1 not found in source
+
+✓ Successfully exported 2 secrets from keyring to dotenv://.env.production
+```
+
+**Use Cases:**
+- Export secrets from a secure provider to a .env file for deployment
+- Share secrets with team members via .env files
+- Create backups of your secrets in different formats
+- Migrate secrets to a different provider
+
 ## Environment Variables
 
 | Variable | Description |

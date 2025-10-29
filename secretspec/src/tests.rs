@@ -2204,3 +2204,396 @@ fn test_import_dotenv_profile_issue_36() {
 
     println!("=== Issue #36 test completed ===");
 }
+
+#[test]
+fn test_export_between_dotenv_files() {
+    // Create temporary directory for testing
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_export_project".to_string(),
+            revision: "1.0".to_string(),
+            extends: None,
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            // Add test secrets
+            secrets.insert(
+                "SECRET_ONE".to_string(),
+                Secret {
+                    description: Some("First test secret".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+            secrets.insert(
+                "SECRET_TWO".to_string(),
+                Secret {
+                    description: Some("Second test secret".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+            secrets.insert(
+                "SECRET_THREE".to_string(),
+                Secret {
+                    description: Some("Third test secret".to_string()),
+                    required: false,
+                    default: Some("default_value".to_string()),
+                },
+            );
+            secrets.insert(
+                "SECRET_FOUR".to_string(),
+                Secret {
+                    description: Some("Fourth test secret (not in source)".to_string()),
+                    required: false,
+                    default: None,
+                },
+            );
+
+            profiles.insert("default".to_string(), Profile { secrets });
+            profiles
+        },
+    };
+
+    // Create source .env file (this will be the default provider - source of export)
+    let source_env_path = project_path.join(".env.source");
+    fs::write(
+        &source_env_path,
+        "SECRET_ONE=value_one_from_source\nSECRET_TWO=value_two_from_source\n",
+    )
+    .unwrap();
+
+    // Create target .env file with existing value
+    let target_env_path = project_path.join(".env.target");
+    fs::write(&target_env_path, "SECRET_TWO=existing_value_in_target\n").unwrap();
+
+    // Create global config with source dotenv as default provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", source_env_path.display())),
+            profile: Some("default".to_string()),
+        },
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Export from source dotenv to target dotenv (without force)
+    let to_provider = format!("dotenv://{}", target_env_path.display());
+    let result = spec.export(&to_provider, false);
+    assert!(result.is_ok(), "Export should succeed: {:?}", result);
+
+    // Verify using dotenvy that the values are correct
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // SECRET_ONE should be exported
+    assert_eq!(
+        vars.get("SECRET_ONE"),
+        Some(&"value_one_from_source".to_string()),
+        "SECRET_ONE should be exported from source"
+    );
+
+    // SECRET_TWO should NOT be overwritten (already exists, no force flag)
+    assert_eq!(
+        vars.get("SECRET_TWO"),
+        Some(&"existing_value_in_target".to_string()),
+        "SECRET_TWO should not be overwritten without force flag"
+    );
+
+    // SECRET_THREE and SECRET_FOUR should not be in the file
+    assert!(
+        vars.get("SECRET_THREE").is_none(),
+        "SECRET_THREE should not be exported (not in source)"
+    );
+    assert!(
+        vars.get("SECRET_FOUR").is_none(),
+        "SECRET_FOUR should not be exported (not in source)"
+    );
+}
+
+#[test]
+fn test_export_with_force() {
+    // Create temporary directory for testing
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_export_force".to_string(),
+            revision: "1.0".to_string(),
+            extends: None,
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            secrets.insert(
+                "SECRET_ONE".to_string(),
+                Secret {
+                    description: Some("First test secret".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+            secrets.insert(
+                "SECRET_TWO".to_string(),
+                Secret {
+                    description: Some("Second test secret".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+
+            profiles.insert("default".to_string(), Profile { secrets });
+            profiles
+        },
+    };
+
+    // Create source .env file
+    let source_env_path = project_path.join(".env.source");
+    fs::write(
+        &source_env_path,
+        "SECRET_ONE=new_value_one\nSECRET_TWO=new_value_two\n",
+    )
+    .unwrap();
+
+    // Create target .env file with existing values
+    let target_env_path = project_path.join(".env.target");
+    fs::write(
+        &target_env_path,
+        "SECRET_ONE=old_value_one\nSECRET_TWO=old_value_two\n",
+    )
+    .unwrap();
+
+    // Create global config with source dotenv as default provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", source_env_path.display())),
+            profile: Some("default".to_string()),
+        },
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Export with force flag
+    let to_provider = format!("dotenv://{}", target_env_path.display());
+    let result = spec.export(&to_provider, true);
+    assert!(
+        result.is_ok(),
+        "Export with force should succeed: {:?}",
+        result
+    );
+
+    // Verify using dotenvy that values were overwritten
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // Both secrets should be overwritten with new values
+    assert_eq!(
+        vars.get("SECRET_ONE"),
+        Some(&"new_value_one".to_string()),
+        "SECRET_ONE should be overwritten with force flag"
+    );
+    assert_eq!(
+        vars.get("SECRET_TWO"),
+        Some(&"new_value_two".to_string()),
+        "SECRET_TWO should be overwritten with force flag"
+    );
+}
+
+#[test]
+fn test_export_edge_cases() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_export_edge_cases".to_string(),
+            revision: "1.0".to_string(),
+            extends: None,
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            secrets.insert(
+                "EMPTY_VALUE".to_string(),
+                Secret {
+                    description: Some("Secret with empty value".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+            secrets.insert(
+                "SPECIAL_CHARS".to_string(),
+                Secret {
+                    description: Some("Secret with special characters".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+            secrets.insert(
+                "MULTILINE".to_string(),
+                Secret {
+                    description: Some("Secret with multiline value".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+
+            profiles.insert("default".to_string(), Profile { secrets });
+            profiles
+        },
+    };
+
+    // Create source .env file with edge case values
+    // Note: $ is omitted because it has special meaning in dotenv (variable interpolation)
+    let source_env_path = project_path.join(".env.source");
+    fs::write(
+        &source_env_path,
+        concat!(
+            "EMPTY_VALUE=\n",
+            "SPECIAL_CHARS=\"value with spaces and special chars: @#%^&*()\"\n",
+            "MULTILINE=\"line1\\nline2\\nline3\"\n"
+        ),
+    )
+    .unwrap();
+
+    // Create empty target .env file
+    let target_env_path = project_path.join(".env.target");
+
+    // Create global config with source dotenv as default provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", source_env_path.display())),
+            profile: Some("default".to_string()),
+        },
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Export edge case values
+    let to_provider = format!("dotenv://{}", target_env_path.display());
+    let result = spec.export(&to_provider, false);
+    assert!(
+        result.is_ok(),
+        "Export with edge cases should succeed: {:?}",
+        result
+    );
+
+    // Verify edge cases were exported correctly
+    let vars: HashMap<String, String> = {
+        let mut result = HashMap::new();
+        let env_vars = dotenvy::from_path_iter(&target_env_path).unwrap();
+        for item in env_vars {
+            let (k, v) = item.unwrap();
+            result.insert(k, v);
+        }
+        result
+    };
+
+    // Verify empty value
+    assert_eq!(
+        vars.get("EMPTY_VALUE"),
+        Some(&"".to_string()),
+        "EMPTY_VALUE should export empty string"
+    );
+
+    // Verify special characters (note: $ is omitted due to variable interpolation in dotenv)
+    assert_eq!(
+        vars.get("SPECIAL_CHARS"),
+        Some(&"value with spaces and special chars: @#%^&*()".to_string()),
+        "SPECIAL_CHARS should be exported correctly"
+    );
+
+    // Verify multiline (will be escaped in dotenv format)
+    assert!(
+        vars.contains_key("MULTILINE"),
+        "MULTILINE should be exported"
+    );
+}
+
+#[test]
+fn test_export_to_readonly_provider() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create project config
+    let project_config = Config {
+        project: Project {
+            name: "test_export_readonly".to_string(),
+            revision: "1.0".to_string(),
+            extends: None,
+        },
+        profiles: {
+            let mut profiles = HashMap::new();
+            let mut secrets = HashMap::new();
+
+            secrets.insert(
+                "SECRET_ONE".to_string(),
+                Secret {
+                    description: Some("Test secret".to_string()),
+                    required: true,
+                    default: None,
+                },
+            );
+
+            profiles.insert("default".to_string(), Profile { secrets });
+            profiles
+        },
+    };
+
+    // Create source .env file
+    let source_env_path = project_path.join(".env.source");
+    fs::write(&source_env_path, "SECRET_ONE=test_value\n").unwrap();
+
+    // Create global config with source dotenv as default provider
+    let global_config = GlobalConfig {
+        defaults: GlobalDefaults {
+            provider: Some(format!("dotenv://{}", source_env_path.display())),
+            profile: Some("default".to_string()),
+        },
+    };
+
+    // Create SecretSpec instance
+    let spec = Secrets::new(project_config, Some(global_config), None, None);
+
+    // Try to export to the read-only 'env' provider
+    let result = spec.export("env", false);
+
+    // Should fail because env provider is read-only
+    assert!(result.is_err(), "Export to read-only provider should fail");
+
+    if let Err(e) = result {
+        let error_msg = format!("{:?}", e);
+        assert!(
+            error_msg.contains("read-only"),
+            "Error should mention read-only provider"
+        );
+    }
+}

@@ -90,6 +90,14 @@ enum Commands {
         /// Provider backend to import from (secrets will be imported to the default provider)
         from_provider: String,
     },
+    /// Export secrets to a provider from another provider
+    Export {
+        /// Provider backend to export to (secrets will be exported from the default provider)
+        to_provider: String,
+        /// Force overwrite existing secrets in the target provider
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 /// Configuration-related subcommands.
@@ -434,6 +442,16 @@ pub fn main() -> Result<()> {
             app.import(&from_provider)
                 .into_diagnostic()
                 .wrap_err("Failed to import secrets")?;
+            Ok(())
+        }
+        // Export secrets from one provider to another
+        Commands::Export { to_provider, force } => {
+            let app = Secrets::load()
+                .into_diagnostic()
+                .wrap_err("Failed to load secretspec configuration")?;
+            app.export(&to_provider, force)
+                .into_diagnostic()
+                .wrap_err("Failed to export secrets")?;
             Ok(())
         }
     }

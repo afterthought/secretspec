@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CLI: Add `export` command to export secrets from default provider to another provider.
+  Supports `--force` flag to overwrite existing secrets in the target provider.
+  By default, existing secrets in the target are skipped.
+
 ## [0.3.3] - 2025-09-10
 
 ### Fixed
