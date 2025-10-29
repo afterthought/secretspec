@@ -132,6 +132,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Supports `--force` flag to overwrite existing secrets in the target provider.
   By default, existing secrets in the target are skipped.
 
+### Fixed
+- Export command now uses default values from configuration when secrets are not found in source provider
+- Export command with `--force` flag now skips existence checks, enabling export to write-only providers
+
 ## [0.3.3] - 2025-09-10
 
 ### Fixed
