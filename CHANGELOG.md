@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions provider: Write-only secrets provider for GitHub Actions workflows.
   Supports repository-level and environment-level secrets via the `gh` CLI.
   Profile names map to environment names (default profile → repository-level secrets).
+### Added
+- Providers: Add Zuplo provider for managing Zuplo API gateway variables (write-only, export command only)
+
 ## [0.3.3] - 2025-09-10
 
 ### Fixed
