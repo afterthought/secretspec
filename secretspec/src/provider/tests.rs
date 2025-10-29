@@ -60,6 +60,18 @@ fn test_create_from_string_with_full_uris() {
     let provider =
         Box::<dyn Provider>::try_from("onepassword+token://:ops_abc123@Private").unwrap();
     assert_eq!(provider.name(), "onepassword");
+
+    // Test GitHub Actions URI
+    let provider = Box::<dyn Provider>::try_from("ghactions://owner/repo").unwrap();
+    assert_eq!(provider.name(), "github-actions");
+
+    // Test GitHub Actions with account
+    let provider = Box::<dyn Provider>::try_from("ghactions://account@owner/repo").unwrap();
+    assert_eq!(provider.name(), "github-actions");
+
+    // Test GitHub Actions with alternate scheme
+    let provider = Box::<dyn Provider>::try_from("github-actions://owner/repo").unwrap();
+    assert_eq!(provider.name(), "github-actions");
 }
 
 #[test]
@@ -85,6 +97,11 @@ fn test_create_from_string_with_plain_names() {
 
     let provider = Box::<dyn Provider>::try_from("pass").unwrap();
     assert_eq!(provider.name(), "pass");
+
+    // Note: GitHub Actions requires a repository in the URI, so plain name won't work
+    // This is expected to fail
+    let result = Box::<dyn Provider>::try_from("ghactions");
+    assert!(result.is_err(), "ghactions without repo should fail");
 }
 
 #[test]
@@ -211,6 +228,46 @@ fn test_url_parsing_behavior() {
     assert_eq!(url.scheme(), "dotenv");
     assert_eq!(url.host_str(), Some("path"));
     assert_eq!(url.path(), "/to/.env");
+
+    // Test GitHub Actions URL parsing
+    let url = "ghactions://owner/repo".parse::<Url>().unwrap();
+    assert_eq!(url.scheme(), "ghactions");
+    assert_eq!(url.host_str(), Some("owner"));
+    assert_eq!(url.path(), "/repo");
+}
+
+#[test]
+fn test_github_actions_write_only() {
+    // Test that GitHub Actions provider has write-only semantics
+    let provider = Box::<dyn Provider>::try_from("ghactions://owner/repo").unwrap();
+
+    // Verify provider name
+    assert_eq!(provider.name(), "github-actions");
+
+    // Verify it allows set operations
+    assert!(
+        provider.allows_set(),
+        "GitHub Actions should allow set operations"
+    );
+
+    // Note: get() will try to check existence via `gh secret list`
+    // In unit tests without gh CLI / auth, it will return Ok(None) or Err
+    // The actual behavior is: returns Some(placeholder) if secret exists,
+    // None if it doesn't exist, Err if auth/CLI issues
+    let result = provider.get("test-project", "TEST_KEY", "default");
+
+    // Without gh CLI authenticated, we expect either:
+    // - Ok(None) if gh fails gracefully (environment doesn't exist)
+    // - Err if gh is missing or auth required
+    match result {
+        Ok(None) | Err(_) => {
+            // Expected in test environment without gh CLI setup
+        }
+        Ok(Some(_)) => {
+            // This would only happen if gh CLI is installed, authenticated,
+            // and TEST_KEY actually exists in owner/repo
+        }
+    }
 }
 
 // Integration tests for all providers

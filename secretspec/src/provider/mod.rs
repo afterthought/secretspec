@@ -18,6 +18,7 @@
 //! - [`KeyringProvider`]: System keyring integration (default)
 //! - [`DotEnvProvider`]: `.env` file support
 //! - [`EnvProvider`]: Environment variables (read-only)
+//! - [`GitHubActionsProvider`]: GitHub Actions secrets (write-only)
 //! - [`OnePasswordProvider`]: OnePassword integration
 //! - [`LastPassProvider`]: LastPass integration
 //!
@@ -28,6 +29,7 @@
 //! ```text
 //! keyring://
 //! dotenv://.env.production
+//! ghactions://owner/repo
 //! onepassword://vault/items
 //! lastpass://folder
 //! ```
@@ -78,6 +80,7 @@ pub mod dotenv;
 pub mod env;
 #[cfg(feature = "gcsm")]
 pub mod gcsm;
+pub mod github_actions;
 #[cfg(feature = "keyring")]
 pub mod keyring;
 pub mod lastpass;
