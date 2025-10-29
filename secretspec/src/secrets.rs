@@ -921,7 +921,6 @@ impl Secrets {
         let mut exported = 0;
         let mut skipped = 0;
         let mut not_found = 0;
-        let mut overwritten = 0;
 
         // Collect all secrets to export - from current profile and default profile
         // This ensures we can export secrets defined in default profile when using other profiles
@@ -932,30 +931,30 @@ impl Secrets {
             // First check if the secret exists in the "from" provider
             match from_provider.get(&self.config.project.name, &name, &profile_display)? {
                 Some(value) => {
-                    // Secret exists in "from" provider, check if it exists in "to" provider
-                    match to_provider_instance.get(
-                        &self.config.project.name,
-                        &name,
-                        &profile_display,
-                    )? {
-                        Some(_) => {
-                            if force {
-                                // Overwrite the existing secret
-                                to_provider_instance.set(
-                                    &self.config.project.name,
-                                    &name,
-                                    &value,
-                                    &profile_display,
-                                )?;
-                                println!(
-                                    "{} {} - {} {}",
-                                    "✓".green(),
-                                    name,
-                                    config.description.as_deref().unwrap_or("No description"),
-                                    "(overwritten)".yellow()
-                                );
-                                overwritten += 1;
-                            } else {
+                    // Secret exists in "from" provider
+                    if force {
+                        // With --force, skip the existence check and just write
+                        to_provider_instance.set(
+                            &self.config.project.name,
+                            &name,
+                            &value,
+                            &profile_display,
+                        )?;
+                        println!(
+                            "{} {} - {}",
+                            "✓".green(),
+                            name,
+                            config.description.as_deref().unwrap_or("No description")
+                        );
+                        exported += 1;
+                    } else {
+                        // Without --force, check if it exists in "to" provider before writing
+                        match to_provider_instance.get(
+                            &self.config.project.name,
+                            &name,
+                            &profile_display,
+                        )? {
+                            Some(_) => {
                                 // Secret exists in "to" provider, skip it
                                 println!(
                                     "{} {} - {} {}",
@@ -966,52 +965,110 @@ impl Secrets {
                                 );
                                 skipped += 1;
                             }
-                        }
-                        None => {
-                            // Secret doesn't exist in "to" provider, export it
-                            to_provider_instance.set(
-                                &self.config.project.name,
-                                &name,
-                                &value,
-                                &profile_display,
-                            )?;
-                            println!(
-                                "{} {} - {}",
-                                "✓".green(),
-                                name,
-                                config.description.as_deref().unwrap_or("No description")
-                            );
-                            exported += 1;
+                            None => {
+                                // Secret doesn't exist in "to" provider, export it
+                                to_provider_instance.set(
+                                    &self.config.project.name,
+                                    &name,
+                                    &value,
+                                    &profile_display,
+                                )?;
+                                println!(
+                                    "{} {} - {}",
+                                    "✓".green(),
+                                    name,
+                                    config.description.as_deref().unwrap_or("No description")
+                                );
+                                exported += 1;
+                            }
                         }
                     }
                 }
                 None => {
-                    // Secret doesn't exist in "from" provider, can't export
-                    println!(
-                        "{} {} - {} {}",
-                        "✗".red(),
-                        name,
-                        config.description.as_deref().unwrap_or("No description"),
-                        "(not found in source)".red()
-                    );
-                    not_found += 1;
+                    // Secret doesn't exist in "from" provider, check if there's a default value
+                    if let Some(default_value) = &config.default {
+                        // Use the default value from the config
+                        let secret_value = SecretString::new(default_value.clone().into());
+                        if force {
+                            // With --force, skip the existence check and just write the default
+                            to_provider_instance.set(
+                                &self.config.project.name,
+                                &name,
+                                &secret_value,
+                                &profile_display,
+                            )?;
+                            println!(
+                                "{} {} - {} {}",
+                                "✓".green(),
+                                name,
+                                config.description.as_deref().unwrap_or("No description"),
+                                "(using default)".cyan()
+                            );
+                            exported += 1;
+                        } else {
+                            // Without --force, check if it exists in "to" provider before writing
+                            match to_provider_instance.get(
+                                &self.config.project.name,
+                                &name,
+                                &profile_display,
+                            )? {
+                                Some(_) => {
+                                    // Secret exists in "to" provider, skip it
+                                    println!(
+                                        "{} {} - {} {}",
+                                        "○".yellow(),
+                                        name,
+                                        config.description.as_deref().unwrap_or("No description"),
+                                        "(already exists in target, skipped)".yellow()
+                                    );
+                                    skipped += 1;
+                                }
+                                None => {
+                                    // Export the default value
+                                    to_provider_instance.set(
+                                        &self.config.project.name,
+                                        &name,
+                                        &secret_value,
+                                        &profile_display,
+                                    )?;
+                                    println!(
+                                        "{} {} - {} {}",
+                                        "✓".green(),
+                                        name,
+                                        config.description.as_deref().unwrap_or("No description"),
+                                        "(using default)".cyan()
+                                    );
+                                    exported += 1;
+                                }
+                            }
+                        }
+                    } else {
+                        // No default value available, can't export
+                        println!(
+                            "{} {} - {} {}",
+                            "✗".red(),
+                            name,
+                            config.description.as_deref().unwrap_or("No description"),
+                            "(not found in source)".red()
+                        );
+                        not_found += 1;
+                    }
                 }
             }
         }
 
         println!(
-            "\nSummary: {} exported, {} overwritten, {} skipped, {} not found in source",
+            "\nSummary: {} exported, {} skipped, {} not found in source",
             exported.to_string().green(),
-            overwritten.to_string().yellow(),
             skipped.to_string().yellow(),
             not_found.to_string().red()
         );
 
-        if exported > 0 || overwritten > 0 {
+        if exported > 0 {
             println!(
                 "\n{} Successfully exported {} secrets from {} to {}",
                 "✓".green(),
-                exported + overwritten,
+                exported,
                 from_provider.name(),
                 to_provider
             );

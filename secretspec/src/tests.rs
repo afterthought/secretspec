@@ -2314,14 +2314,17 @@ fn test_export_between_dotenv_files() {
         "SECRET_TWO should not be overwritten without force flag"
     );
 
-    // SECRET_THREE and SECRET_FOUR should not be in the file
-    assert!(
-        vars.get("SECRET_THREE").is_none(),
-        "SECRET_THREE should not be exported (not in source)"
+    // SECRET_THREE should be exported with its default value (not in source but has default)
+    assert_eq!(
+        vars.get("SECRET_THREE"),
+        Some(&"default_value".to_string()),
+        "SECRET_THREE should be exported using its default value"
     );
+
+    // SECRET_FOUR should not be in the file (not in source and no default)
     assert!(
         vars.get("SECRET_FOUR").is_none(),
-        "SECRET_FOUR should not be exported (not in source)"
+        "SECRET_FOUR should not be exported (not in source and no default)"
     );
 }
 
