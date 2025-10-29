@@ -20,6 +20,7 @@
 //! - [`EnvProvider`]: Environment variables (read-only)
 //! - [`OnePasswordProvider`]: OnePassword integration
 //! - [`LastPassProvider`]: LastPass integration
+//! - [`ZuploProvider`]: Zuplo API gateway variables (write-only, export only)
 //!
 //! ## URI-Based Configuration
 //!
@@ -62,6 +63,7 @@ pub mod env;
 pub mod keyring;
 pub mod lastpass;
 pub mod onepassword;
+pub mod zuplo;
 #[macro_use]
 pub mod macros;
 
