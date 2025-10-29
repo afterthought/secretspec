@@ -21,6 +21,7 @@
 //! - [`GitHubActionsProvider`]: GitHub Actions secrets (write-only)
 //! - [`OnePasswordProvider`]: OnePassword integration
 //! - [`LastPassProvider`]: LastPass integration
+//! - [`ZuploProvider`]: Zuplo API gateway variables (write-only, export only)
 //!
 //! ## URI-Based Configuration
 //!
@@ -88,6 +89,7 @@ pub mod onepassword;
 pub mod pass;
 #[cfg(feature = "vault")]
 pub mod vault;
+pub mod zuplo;
 #[macro_use]
 pub mod macros;
 

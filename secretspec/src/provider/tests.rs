@@ -270,6 +270,60 @@ fn test_github_actions_write_only() {
     }
 }
 
+#[test]
+fn test_zuplo_uri_parsing() {
+    // Test zuplo with no project/branch (uses CLI context)
+    let provider = Box::<dyn Provider>::try_from("zuplo://").unwrap();
+    assert_eq!(provider.name(), "zuplo");
+
+    // Test zuplo with project only
+    let provider = Box::<dyn Provider>::try_from("zuplo://my-project").unwrap();
+    assert_eq!(provider.name(), "zuplo");
+
+    // Test zuplo with project and branch
+    let provider = Box::<dyn Provider>::try_from("zuplo://my-project/main").unwrap();
+    assert_eq!(provider.name(), "zuplo");
+
+    // Test plain provider name
+    let provider = Box::<dyn Provider>::try_from("zuplo").unwrap();
+    assert_eq!(provider.name(), "zuplo");
+}
+
+#[test]
+fn test_zuplo_write_only() {
+    // Test that Zuplo provider has write-only semantics with no read support
+    let provider = Box::<dyn Provider>::try_from("zuplo://my-project").unwrap();
+
+    // Verify provider name
+    assert_eq!(provider.name(), "zuplo");
+
+    // Verify it allows set operations
+    assert!(provider.allows_set(), "Zuplo should allow set operations");
+
+    // Verify that get() always returns an error (no read support)
+    let result = provider.get("test-project", "TEST_KEY", "default");
+    assert!(
+        result.is_err(),
+        "Zuplo provider should always error on get() - no read support"
+    );
+
+    // Verify the error message is helpful
+    match result {
+        Err(err) => {
+            let error_msg = err.to_string();
+            assert!(
+                error_msg.contains("does not support reading"),
+                "Error should explain that reading is not supported"
+            );
+            assert!(
+                error_msg.contains("export"),
+                "Error should mention the export command"
+            );
+        }
+        Ok(_) => panic!("Expected error from get()"),
+    }
+}
+
 // Integration tests for all providers
 #[cfg(test)]
 mod integration_tests {
