@@ -30,18 +30,24 @@ use url::Url;
 ///
 /// // With a specific project
 /// let config = ZuploConfig {
+///     account: None,
 ///     project: Some("my-api".to_string()),
 ///     branch: None,
 /// };
 ///
-/// // With both project and branch
+/// // With account, project and branch
 /// let config = ZuploConfig {
+///     account: Some("my-account".to_string()),
 ///     project: Some("my-api".to_string()),
 ///     branch: Some("main".to_string()),
 /// };
 /// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ZuploConfig {
+    /// The Zuplo account name.
+    ///
+    /// If not set, the Zuplo CLI will use the default account.
+    pub account: Option<String>,
     /// The Zuplo project name.
     ///
     /// If not set, the Zuplo CLI will use the current project context.
@@ -69,12 +75,21 @@ impl TryFrom<&Url> for ZuploConfig {
 
         let mut config = Self::default();
 
-        // Parse URL for optional project and branch
-        // Format: zuplo://[project]/[branch]
+        // Parse URL for optional account, project and branch
+        // Format: zuplo://[account]@[project]/[branch]
         // Examples:
-        //   zuplo:// -> no project, no branch
+        //   zuplo:// -> no account, no project, no branch
         //   zuplo://my-project -> project only
         //   zuplo://my-project/main -> project and branch
+        //   zuplo://my-account@my-project/main -> account, project and branch
+
+        // Parse account from username
+        let username = url.username();
+        if !username.is_empty() {
+            config.account = Some(username.to_string());
+        }
+
+        // Parse project from host
         if let Some(host) = url.host_str() {
             if !host.is_empty() && host != "localhost" {
                 config.project = Some(host.to_string());
@@ -138,6 +153,9 @@ impl TryFrom<Url> for ZuploConfig {
 /// # Export secrets to Zuplo (from default provider like 1Password)
 /// secretspec export zuplo://my-api/main
 ///
+/// # With account specified
+/// secretspec export zuplo://my-account@my-api/main
+///
 /// # With profile (exports to specific branch)
 /// secretspec export zuplo://my-api/production --profile production
 /// ```
@@ -152,7 +170,7 @@ crate::register_provider! {
     name: "zuplo",
     description: "Zuplo API gateway variables (write-only, export only)",
     schemes: ["zuplo"],
-    examples: ["zuplo://", "zuplo://my-project", "zuplo://my-project/main"],
+    examples: ["zuplo://", "zuplo://my-project", "zuplo://my-project/main", "zuplo://account@my-project/main"],
 }
 
 impl ZuploProvider {
@@ -221,7 +239,7 @@ impl ZuploProvider {
 
     /// Builds the command arguments for variable operations.
     ///
-    /// Adds optional --project and --branch flags based on configuration
+    /// Adds optional --account, --project and --branch flags based on configuration
     /// and profile.
     ///
     /// # Arguments
@@ -231,9 +249,15 @@ impl ZuploProvider {
     ///
     /// # Returns
     ///
-    /// A vector of argument strings including optional project/branch flags
+    /// A vector of argument strings including optional account/project/branch flags
     fn build_args(&self, base_args: Vec<String>, profile: &str) -> Vec<String> {
         let mut args = base_args;
+
+        // Add account if specified
+        if let Some(account) = &self.config.account {
+            args.push("--account".to_string());
+            args.push(account.clone());
+        }
 
         // Add project if specified
         if let Some(project) = &self.config.project {
