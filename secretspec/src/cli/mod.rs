@@ -94,6 +94,12 @@ enum Commands {
     Export {
         /// Provider backend to export to (secrets will be exported from the default provider)
         to_provider: String,
+        /// Provider backend to export from (source)
+        #[arg(short, long, env = "SECRETSPEC_PROVIDER")]
+        provider: Option<String>,
+        /// Profile to export from (source)
+        #[arg(short = 'P', long, env = "SECRETSPEC_PROFILE")]
+        profile: Option<String>,
         /// Force overwrite existing secrets in the target provider
         #[arg(short, long)]
         force: bool,
@@ -445,10 +451,21 @@ pub fn main() -> Result<()> {
             Ok(())
         }
         // Export secrets from one provider to another
-        Commands::Export { to_provider, force } => {
-            let app = Secrets::load()
+        Commands::Export {
+            to_provider,
+            provider,
+            profile,
+            force,
+        } => {
+            let mut app = Secrets::load()
                 .into_diagnostic()
                 .wrap_err("Failed to load secretspec configuration")?;
+            if let Some(p) = provider {
+                app.set_provider(p);
+            }
+            if let Some(p) = profile {
+                app.set_profile(p);
+            }
             app.export(&to_provider, force)
                 .into_diagnostic()
                 .wrap_err("Failed to export secrets")?;
