@@ -265,15 +265,16 @@ impl ZuploProvider {
             args.push(project.clone());
         }
 
-        // Add branch if specified in config or derived from profile
-        // Profile "default" -> use config branch or none
-        // Named profile -> use profile name as branch (overrides config)
-        if profile != "default" {
-            args.push("--branch".to_string());
-            args.push(profile.to_string());
-        } else if let Some(branch) = &self.config.branch {
+        // Add branch based on priority:
+        // 1. Branch specified in config (from URI) - always takes precedence
+        // 2. Profile name (if not "default") - fallback
+        // 3. None - use Zuplo CLI defaults
+        if let Some(branch) = &self.config.branch {
             args.push("--branch".to_string());
             args.push(branch.clone());
+        } else if profile != "default" {
+            args.push("--branch".to_string());
+            args.push(profile.to_string());
         }
 
         args
