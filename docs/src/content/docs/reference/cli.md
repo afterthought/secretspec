@@ -54,6 +54,57 @@ Provider: keyring
 Profile:  development
 ```
 
+### config provider add
+Add a provider alias to your configuration.
+
+```bash
+secretspec config provider add <ALIAS> <URI>
+```
+
+**Arguments:**
+- `<ALIAS>` - Short name for the provider (e.g., `prod_vault`, `shared`)
+- `<URI>` - Provider URI (e.g., `onepassword://vault/Production`, `env://`)
+
+**Example:**
+```bash
+$ secretspec config provider add prod_vault "onepassword://vault/Production"
+✓ Provider alias 'prod_vault' saved
+
+$ secretspec config provider add shared "onepassword://vault/Shared"
+✓ Provider alias 'shared' saved
+```
+
+### config provider list
+List all configured provider aliases.
+
+```bash
+secretspec config provider list
+```
+
+**Example:**
+```bash
+$ secretspec config provider list
+prod_vault  → onepassword://vault/Production
+shared      → onepassword://vault/Shared
+env         → env://
+```
+
+### config provider remove
+Remove a provider alias from your configuration.
+
+```bash
+secretspec config provider remove <ALIAS>
+```
+
+**Arguments:**
+- `<ALIAS>` - Name of the alias to remove
+
+**Example:**
+```bash
+$ secretspec config provider remove prod_vault
+✓ Provider alias 'prod_vault' removed
+```
+
 ### check
 Check if all required secrets are available, with interactive prompting for missing secrets.
 
@@ -119,10 +170,34 @@ secretspec run [OPTIONS] -- <COMMAND>
 - `-p, --provider <PROVIDER>` - Provider backend to use
 - `-P, --profile <PROFILE>` - Profile to use
 
-**Example:**
+**Examples:**
 ```bash
+# Run npm with secrets available as environment variables
 $ secretspec run --profile production -- npm run deploy
+
+# Verify secrets are injected
+$ secretspec run -- env | grep DATABASE_URL
+DATABASE_URL=postgresql://localhost/mydb
 ```
+
+:::note[Shell Variable Expansion]
+Variables like `$DATABASE_URL` in the command line are expanded by your **shell before** secretspec runs. To use injected secrets in the command itself, wrap it in a subshell:
+
+```bash
+# This won't work - $DATABASE_URL is expanded before secretspec runs
+$ secretspec run -- echo $DATABASE_URL
+# Output: (empty, because DATABASE_URL isn't set in current shell)
+
+# This works - variable expansion happens in the subprocess
+$ secretspec run -- sh -c 'echo $DATABASE_URL'
+# Output: postgresql://localhost/mydb
+```
+
+For most use cases, simply run your application and it will read secrets from its environment:
+```bash
+$ secretspec run -- node app.js  # app.js reads process.env.DATABASE_URL
+```
+:::
 
 ### import
 Import secrets from one provider to another.

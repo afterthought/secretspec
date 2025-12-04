@@ -91,6 +91,11 @@ impl Provider for KeyringProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        // Keyring can be just "keyring" or "keyring://"
+        "keyring".to_string()
+    }
+
     /// Retrieves a secret from the system keychain.
     ///
     /// The secret is looked up using a hierarchical key structure:

@@ -247,6 +247,10 @@ impl Provider for GitHubActionsProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        format!("github-actions://{}", self.config.repo)
+    }
+
     /// Checks if a secret exists in GitHub Actions.
     ///
     /// **Note**: This method cannot return the actual secret value because GitHub Actions

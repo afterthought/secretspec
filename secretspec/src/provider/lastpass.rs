@@ -279,6 +279,25 @@ impl Provider for LastPassProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        // LastPass can be "lastpass" (default) or "lastpass://folder" or "lastpass://Folder/Subfolder"
+        if let Some(ref prefix) = self.config.folder_prefix {
+            // The folder_prefix might be something like "SecretSpec/{project}/{profile}/{key}"
+            // We want to extract just the folder part for the URI
+            if let Some(folder) = prefix.split('/').next() {
+                if folder.is_empty() || folder == "Shared" {
+                    "lastpass".to_string()
+                } else {
+                    format!("lastpass://{}", folder)
+                }
+            } else {
+                "lastpass".to_string()
+            }
+        } else {
+            "lastpass".to_string()
+        }
+    }
+
     /// Retrieves a secret from LastPass.
     ///
     /// Fetches the value of a secret stored in LastPass at the path

@@ -316,6 +316,25 @@ impl Provider for ZuploProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        let mut uri = "zuplo://".to_string();
+        if let Some(account) = &self.config.account {
+            uri.push_str(account);
+            uri.push('@');
+        }
+        if let Some(project) = &self.config.project {
+            uri.push_str(project);
+        }
+        if let Some(branch) = &self.config.branch {
+            uri.push('/');
+            uri.push_str(branch);
+        }
+        if !self.config.is_secret {
+            uri.push_str("?is-secret=false");
+        }
+        uri
+    }
+
     /// Attempts to read a variable from Zuplo.
     ///
     /// **Note**: This method always returns an error because the Zuplo CLI

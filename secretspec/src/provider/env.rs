@@ -112,6 +112,11 @@ impl Provider for EnvProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        // Env can be "env", "env:", or "env://"
+        "env".to_string()
+    }
+
     /// Retrieves a secret value from environment variables.
     ///
     /// This method reads the value directly from the process environment

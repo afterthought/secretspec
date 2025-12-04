@@ -11,19 +11,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI: Add `export` command to export secrets from default provider to another provider.
   Supports `--force` flag to overwrite existing secrets in the target provider.
   By default, existing secrets in the target are skipped.
+- GitHub Actions provider: Write-only secrets provider for GitHub Actions workflows.
+  Supports repository-level and environment-level secrets via the `gh` CLI.
+  Profile names map to environment names (default profile → repository-level secrets).
+- Zuplo provider: Add Zuplo provider for managing Zuplo API gateway variables (write-only, export command only)
+- CLI: Add `--no-secret` flag to export command for Zuplo provider to create regular environment variables
+  instead of secrets. Also supports `?is-secret=false` query parameter in provider URL.
 
 ### Fixed
 - Export command now uses default values from configuration when secrets are not found in source provider
 - Export command with `--force` flag now skips existence checks, enabling export to write-only providers
 
+## [0.4.1] - 2025-11-27
+
 ### Added
-- GitHub Actions provider: Write-only secrets provider for GitHub Actions workflows.
-  Supports repository-level and environment-level secrets via the `gh` CLI.
-  Profile names map to environment names (default profile → repository-level secrets).
+- OnePassword provider: Support for `SECRETSPEC_OPCLI_PATH` environment variable to specify custom path to the OnePassword CLI
+- OnePassword provider: Automatic detection of Windows Subsystem for Linux 2 (WSL2) and use of `op.exe` on that platform
+- Documentation for `as_path` option in configuration reference, Rust SDK docs, and landing page
+- Documentation for per-secret providers with fallback chains on landing page
+
+### Changed
+- OnePassword provider: Use stdin instead of temporary files when creating items for WSL2 compatibility (WSL paths are invalid when passed to Windows executables)
+
+### Fixed
+- Output status/progress messages to stderr instead of stdout, fixing direnv integration where stdout was evaluated as shell code
+
+## [0.4.0] - 2025-11-24
+
 ### Added
-- Providers: Add Zuplo provider for managing Zuplo API gateway variables (write-only, export command only)
-- CLI: Add `--no-secret` flag to export command for Zuplo provider to create regular environment variables
-  instead of secrets. Also supports `?is-secret=false` query parameter in provider URL.
+- Profile-level default configuration: `profiles.<name>.defaults` section for shared settings across secrets in a profile
+- Default providers for profiles: define common providers once and have all secrets use them unless overridden
+- Default values and required settings can now be specified at profile level to reduce repetition
+- `as_path` option for secrets: write secret values to temporary files and return the file path instead of the value. Temporary files are automatically cleaned up when the resolved secrets are dropped in Rust SDK usage. For CLI commands (`get` and `check`), temporary files are persisted and NOT deleted after the command exits. In the Rust SDK, fields with `as_path = true` are generated as `PathBuf` or `Option<PathBuf>` instead of `String`
+
+### Changed
+- Secret `required` field is now `Option<bool>` to allow profile-level defaults to apply when not explicitly set
+- Secret `default` field can now inherit from profile-level defaults if not specified per-secret
+- Secret `providers` field can now inherit from profile-level defaults if not specified per-secret
+- Profile defaults only apply to secrets that don't explicitly set these fields
+
+## [0.3.4] - 2025-11-09
+
+### Changed
+- `Secrets::check()` now returns `Result<ValidatedSecrets>` instead of `Result<()>`, allowing callers to access the validated secrets
 
 ## [0.3.3] - 2025-09-10
 

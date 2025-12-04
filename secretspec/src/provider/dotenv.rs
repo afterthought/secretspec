@@ -163,6 +163,23 @@ impl Provider for DotEnvProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        // Dotenv uses single colon format: dotenv:path
+        // The path can be relative or absolute
+        let path_str = self.config.path.display().to_string();
+
+        if path_str == ".env" {
+            // Default case - just return "dotenv"
+            "dotenv".to_string()
+        } else if path_str.starts_with('/') {
+            // Absolute path
+            format!("dotenv:{}", path_str)
+        } else {
+            // Relative path
+            format!("dotenv:{}", path_str)
+        }
+    }
+
     /// Retrieves a secret value from the .env file.
     ///
     /// Reads the .env file and returns the value for the specified key.
@@ -276,8 +293,10 @@ impl Provider for DotEnvProvider {
                 key.clone(),
                 Secret {
                     description: Some(format!("{} secret", key)),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    providers: None,
+                    as_path: None,
                 },
             );
         }
@@ -348,7 +367,7 @@ mod tests {
             api_key_config.description,
             Some("API_KEY secret".to_string())
         );
-        assert!(api_key_config.required);
+        assert_eq!(api_key_config.required, Some(true));
         assert!(api_key_config.default.is_none());
     }
 
