@@ -382,11 +382,9 @@ impl Provider for ZuploProvider {
             value.expose_secret().to_string(),
         ];
 
-        // Only add --is-secret flag if configured (default is true)
-        if self.config.is_secret {
-            base_args.push("--is-secret".to_string());
-            base_args.push("true".to_string());
-        }
+        // Add --is-secret flag with the configured value
+        base_args.push("--is-secret".to_string());
+        base_args.push(self.config.is_secret.to_string());
 
         let create_args = self.build_args(base_args, profile);
 
