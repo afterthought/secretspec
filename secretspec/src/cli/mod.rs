@@ -110,6 +110,9 @@ enum Commands {
         /// Force overwrite existing secrets in the target provider
         #[arg(short, long)]
         force: bool,
+        /// Export as non-secret variables (Zuplo only: disables --is-secret flag)
+        #[arg(long)]
+        no_secret: bool,
     },
 }
 
@@ -603,6 +606,7 @@ pub fn main() -> Result<()> {
             provider,
             profile,
             force,
+            no_secret,
         } => {
             let mut app = Secrets::load()
                 .into_diagnostic()
@@ -613,7 +617,19 @@ pub fn main() -> Result<()> {
             if let Some(p) = profile {
                 app.set_profile(p);
             }
-            app.export(&to_provider, force)
+
+            // If --no-secret flag is set, append query parameter to the provider URL
+            let target_provider = if no_secret {
+                if to_provider.contains('?') {
+                    format!("{}&is-secret=false", to_provider)
+                } else {
+                    format!("{}?is-secret=false", to_provider)
+                }
+            } else {
+                to_provider
+            };
+
+            app.export(&target_provider, force)
                 .into_diagnostic()
                 .wrap_err("Failed to export secrets")?;
             Ok(())

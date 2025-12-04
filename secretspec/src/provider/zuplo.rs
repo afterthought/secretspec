@@ -42,7 +42,7 @@ use url::Url;
 ///     branch: Some("main".to_string()),
 /// };
 /// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZuploConfig {
     /// The Zuplo account name.
     ///
@@ -57,6 +57,24 @@ pub struct ZuploConfig {
     /// If not set, the Zuplo CLI may apply variables to all environments
     /// or use the current branch context.
     pub branch: Option<String>,
+    /// Whether to mark variables as secrets in Zuplo.
+    ///
+    /// Defaults to `true`. Set to `false` to create regular environment
+    /// variables that are visible in the Zuplo UI.
+    ///
+    /// Can be controlled via URL query parameter: `zuplo://project?is-secret=false`
+    pub is_secret: bool,
+}
+
+impl Default for ZuploConfig {
+    fn default() -> Self {
+        Self {
+            account: None,
+            project: None,
+            branch: None,
+            is_secret: true,
+        }
+    }
 }
 
 impl TryFrom<&Url> for ZuploConfig {
@@ -76,12 +94,13 @@ impl TryFrom<&Url> for ZuploConfig {
         let mut config = Self::default();
 
         // Parse URL for optional account, project and branch
-        // Format: zuplo://[account]@[project]/[branch]
+        // Format: zuplo://[account]@[project]/[branch][?is-secret=false]
         // Examples:
         //   zuplo:// -> no account, no project, no branch
         //   zuplo://my-project -> project only
         //   zuplo://my-project/main -> project and branch
         //   zuplo://my-account@my-project/main -> account, project and branch
+        //   zuplo://my-project?is-secret=false -> project with non-secret variables
 
         // Parse account from username
         let username = url.username();
@@ -99,6 +118,13 @@ impl TryFrom<&Url> for ZuploConfig {
                 if !path.is_empty() {
                     config.branch = Some(path.to_string());
                 }
+            }
+        }
+
+        // Parse query parameters for is-secret option
+        for (key, value) in url.query_pairs() {
+            if key == "is-secret" {
+                config.is_secret = value != "false" && value != "0";
             }
         }
 
@@ -137,7 +163,8 @@ impl TryFrom<Url> for ZuploConfig {
 ///   - Profile "default": No branch specified (may apply to all environments)
 ///   - Profile name: Used as `--branch` parameter
 /// - **Variable name**: Used directly as the Zuplo variable name
-/// - **Secret flag**: Always set to `--is-secret true`
+/// - **Secret flag**: Set to `--is-secret true` by default; use `?is-secret=false`
+///   in the URL to create regular (non-secret) environment variables
 ///
 /// # Authentication
 ///
@@ -158,6 +185,9 @@ impl TryFrom<Url> for ZuploConfig {
 ///
 /// # With profile (exports to specific branch)
 /// secretspec export zuplo://my-api/production --profile production
+///
+/// # Export as regular environment variables (not secrets)
+/// secretspec export 'zuplo://my-api/main?is-secret=false'
 /// ```
 pub struct ZuploProvider {
     /// Configuration for the provider including project and branch.
@@ -170,7 +200,7 @@ crate::register_provider! {
     name: "zuplo",
     description: "Zuplo API gateway variables (write-only, export only)",
     schemes: ["zuplo"],
-    examples: ["zuplo://", "zuplo://my-project", "zuplo://my-project/main", "zuplo://account@my-project/main"],
+    examples: ["zuplo://", "zuplo://my-project", "zuplo://my-project/main", "zuplo://account@my-project/main", "zuplo://my-project?is-secret=false"],
 }
 
 impl ZuploProvider {
@@ -343,19 +373,22 @@ impl Provider for ZuploProvider {
     /// - Project access issues
     fn set(&self, _project: &str, key: &str, value: &SecretString, profile: &str) -> Result<()> {
         // Try to create the variable first
-        let create_args = self.build_args(
-            vec![
-                "variable".to_string(),
-                "create".to_string(),
-                "--name".to_string(),
-                key.to_string(),
-                "--value".to_string(),
-                value.expose_secret().to_string(),
-                "--is-secret".to_string(),
-                "true".to_string(),
-            ],
-            profile,
-        );
+        let mut base_args = vec![
+            "variable".to_string(),
+            "create".to_string(),
+            "--name".to_string(),
+            key.to_string(),
+            "--value".to_string(),
+            value.expose_secret().to_string(),
+        ];
+
+        // Only add --is-secret flag if configured (default is true)
+        if self.config.is_secret {
+            base_args.push("--is-secret".to_string());
+            base_args.push("true".to_string());
+        }
+
+        let create_args = self.build_args(base_args, profile);
 
         let create_args_str: Vec<&str> = create_args.iter().map(|s| s.as_str()).collect();
 
