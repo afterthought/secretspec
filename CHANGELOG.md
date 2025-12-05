@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-12-05
+
 ### Added
+- Proto plugin: Add TOML plugin configuration for proto version manager
+  (install via `proto plugin add secretspec "https://raw.githubusercontent.com/afterthought/secretspec/main/proto-plugin.toml"`)
 - CLI: Add `export` command to export secrets from default provider to another provider.
   Supports `--force` flag to overwrite existing secrets in the target provider.
   By default, existing secrets in the target are skipped.

@@ -1,0 +1,32 @@
+name = "Secretspec"
+type = "cli"
+
+[resolve]
+git-url = "https://github.com/afterthought/secretspec"
+
+[detect]
+version-files = [".secretspec-version"]
+
+[install]
+download-url = "https://github.com/afterthought/secretspec/releases/download/v{version}/{download_file}"
+checksum-url = "https://github.com/afterthought/secretspec/releases/download/v{version}/{checksum_file}"
+
+[platform.linux]
+archive-prefix = "secretspec-{arch}-unknown-linux-gnu"
+checksum-file = "secretspec-{arch}-unknown-linux-gnu.tar.xz.sha256"
+download-file = "secretspec-{arch}-unknown-linux-gnu.tar.xz"
+
+[platform.macos]
+archive-prefix = "secretspec-{arch}-apple-darwin"
+checksum-file = "secretspec-{arch}-apple-darwin.tar.xz.sha256"
+download-file = "secretspec-{arch}-apple-darwin.tar.xz"
+
+[platform.windows]
+archive-prefix = "secretspec-{arch}-pc-windows-msvc"
+exe-path = "secretspec.exe"
+checksum-file = "secretspec-{arch}-pc-windows-msvc.zip.sha256"
+download-file = "secretspec-{arch}-pc-windows-msvc.zip"
+
+[install.exes.secretspec]
+exe-path = "secretspec"
+primary = true
