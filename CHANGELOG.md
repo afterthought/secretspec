@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CLI: Add `--include` and `--exclude` flags to export command for filtering secrets by pattern.
+  Supports simple glob patterns: `FOO*` (prefix), `*FOO` (suffix), `*FOO*` (contains), or exact match.
+  Multiple patterns can be specified. Also supports `?include=pattern&exclude=pattern` query parameters in provider URL.
+
 ## [0.4.2] - 2025-12-05
 
 ### Added
