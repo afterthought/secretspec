@@ -27,6 +27,65 @@ fn find_config_file() -> Result<PathBuf> {
     }
 }
 
+/// Simple glob pattern matching for secret names.
+///
+/// Supports the following patterns:
+/// - `FOO` - exact match
+/// - `FOO*` - prefix match (starts with FOO)
+/// - `*FOO` - suffix match (ends with FOO)
+/// - `*FOO*` - contains match (contains FOO)
+fn matches_glob_pattern(name: &str, pattern: &str) -> bool {
+    let starts_with_star = pattern.starts_with('*');
+    let ends_with_star = pattern.ends_with('*');
+
+    match (starts_with_star, ends_with_star) {
+        (true, true) => {
+            // *FOO* - contains
+            let inner = &pattern[1..pattern.len() - 1];
+            name.contains(inner)
+        }
+        (true, false) => {
+            // *FOO - suffix match
+            let suffix = &pattern[1..];
+            name.ends_with(suffix)
+        }
+        (false, true) => {
+            // FOO* - prefix match
+            let prefix = &pattern[..pattern.len() - 1];
+            name.starts_with(prefix)
+        }
+        (false, false) => {
+            // FOO - exact match
+            name == pattern
+        }
+    }
+}
+
+/// Check if a secret name should be included based on include/exclude patterns.
+///
+/// Rules:
+/// - If include patterns are specified, name must match at least one
+/// - If exclude patterns are specified, name must not match any
+/// - Include is checked first, then exclude
+fn should_include_secret(name: &str, include: &[String], exclude: &[String]) -> bool {
+    // If include patterns are specified, name must match at least one
+    if !include.is_empty() {
+        let matches_include = include.iter().any(|p| matches_glob_pattern(name, p));
+        if !matches_include {
+            return false;
+        }
+    }
+
+    // If exclude patterns are specified, name must not match any
+    if !exclude.is_empty() {
+        let matches_exclude = exclude.iter().any(|p| matches_glob_pattern(name, p));
+        if matches_exclude {
+            return false;
+        }
+    }
+
+    true
+}
 /// The main entry point for the secretspec library
 ///
 /// `Secrets` manages the loading, validation, and retrieval of secrets
@@ -1320,6 +1379,20 @@ impl Secrets {
         // Resolve profile (checks env var, then global config, then defaults to "default")
         let profile_display = self.resolve_profile_name(None);
 
+        // Parse include/exclude patterns from the provider URL query parameters
+        let mut include_patterns: Vec<String> = Vec::new();
+        let mut exclude_patterns: Vec<String> = Vec::new();
+
+        if let Ok(url) = url::Url::parse(to_provider) {
+            for (key, value) in url.query_pairs() {
+                match key.as_ref() {
+                    "include" => include_patterns.push(value.to_string()),
+                    "exclude" => exclude_patterns.push(value.to_string()),
+                    _ => {}
+                }
+            }
+        }
+
         // Create the "to" provider
         let to_provider_instance = Box::<dyn ProviderTrait>::try_from(to_provider.to_string())?;
 
@@ -1331,8 +1404,22 @@ impl Secrets {
             )));
         }
 
+        // Build filter info for display
+        let filter_info = if !include_patterns.is_empty() || !exclude_patterns.is_empty() {
+            let mut parts = Vec::new();
+            if !include_patterns.is_empty() {
+                parts.push(format!("include: {}", include_patterns.join(", ")));
+            }
+            if !exclude_patterns.is_empty() {
+                parts.push(format!("exclude: {}", exclude_patterns.join(", ")));
+            }
+            format!(" [{}]", parts.join("; "))
+        } else {
+            String::new()
+        };
+
         println!(
-            "Exporting secrets from {} to {} (profile: {}){}...\n",
+            "Exporting secrets from {} to {} (profile: {}){}{}...\n",
             from_provider.name().blue(),
             to_provider.blue(),
             profile_display.cyan(),
@@ -1340,7 +1427,8 @@ impl Secrets {
                 " [FORCE]".yellow().to_string()
             } else {
                 String::new()
-            }
+            },
+            filter_info.cyan()
         );
 
         // Get the profile configuration
@@ -1351,6 +1439,7 @@ impl Secrets {
         let mut exported = 0;
         let mut skipped = 0;
         let mut not_found = 0;
+        let mut filtered = 0;
 
         // Collect all secrets to export - from current profile and default profile
         // This ensures we can export secrets defined in default profile when using other profiles
@@ -1358,6 +1447,24 @@ impl Secrets {
 
         // Process each secret using proper profile resolution
         for (name, config) in profile.into_iter() {
+            // Check if this secret should be included based on filters
+            if !should_include_secret(&name, &include_patterns, &exclude_patterns) {
+                println!(
+                    "{} {} - {} {}",
+                    "⊘".dimmed(),
+                    name.dimmed(),
+                    config
+                        .description
+                        .as_deref()
+                        .unwrap_or("No description")
+                        .to_string()
+                        .dimmed(),
+                    "(filtered out)".dimmed()
+                );
+                filtered += 1;
+                continue;
+            }
+
             // First check if the secret exists in the "from" provider
             match from_provider.get(&self.config.project.name, &name, &profile_display)? {
                 Some(value) => {
@@ -1487,12 +1594,16 @@ impl Secrets {
             }
         }
 
-        println!(
-            "\nSummary: {} exported, {} skipped, {} not found in source",
-            exported.to_string().green(),
-            skipped.to_string().yellow(),
-            not_found.to_string().red()
-        );
+        // Build summary message
+        let mut summary_parts = vec![
+            format!("{} exported", exported.to_string().green()),
+            format!("{} skipped", skipped.to_string().yellow()),
+            format!("{} not found in source", not_found.to_string().red()),
+        ];
+        if filtered > 0 {
+            summary_parts.push(format!("{} filtered out", filtered.to_string().dimmed()));
+        }
+        println!("\nSummary: {}", summary_parts.join(", "));
 
         if exported > 0 {
             println!(
@@ -1756,5 +1867,86 @@ impl Secrets {
 
         let status = cmd.status()?;
         std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
+#[cfg(test)]
+mod glob_pattern_tests {
+    use super::*;
+
+    #[test]
+    fn test_exact_match() {
+        assert!(matches_glob_pattern("FOO", "FOO"));
+        assert!(!matches_glob_pattern("FOO", "BAR"));
+        assert!(!matches_glob_pattern("FOOBAR", "FOO"));
+    }
+
+    #[test]
+    fn test_prefix_match() {
+        assert!(matches_glob_pattern("FOO_BAR", "FOO*"));
+        assert!(matches_glob_pattern("FOO", "FOO*"));
+        assert!(!matches_glob_pattern("BAR_FOO", "FOO*"));
+    }
+
+    #[test]
+    fn test_suffix_match() {
+        assert!(matches_glob_pattern("BAR_FOO", "*FOO"));
+        assert!(matches_glob_pattern("FOO", "*FOO"));
+        assert!(!matches_glob_pattern("FOO_BAR", "*FOO"));
+    }
+
+    #[test]
+    fn test_contains_match() {
+        assert!(matches_glob_pattern("BAR_FOO_BAZ", "*FOO*"));
+        assert!(matches_glob_pattern("FOO", "*FOO*"));
+        assert!(matches_glob_pattern("FOOBAR", "*FOO*"));
+        assert!(matches_glob_pattern("BARFOO", "*FOO*"));
+        assert!(!matches_glob_pattern("BAR", "*FOO*"));
+    }
+
+    #[test]
+    fn test_should_include_no_filters() {
+        // No filters means include everything
+        assert!(should_include_secret("FOO", &[], &[]));
+        assert!(should_include_secret("BAR", &[], &[]));
+    }
+
+    #[test]
+    fn test_should_include_with_include_filter() {
+        let include = vec!["FOO*".to_string()];
+        assert!(should_include_secret("FOO_BAR", &include, &[]));
+        assert!(should_include_secret("FOO", &include, &[]));
+        assert!(!should_include_secret("BAR", &include, &[]));
+    }
+
+    #[test]
+    fn test_should_include_with_exclude_filter() {
+        let exclude = vec!["FOO*".to_string()];
+        assert!(!should_include_secret("FOO_BAR", &[], &exclude));
+        assert!(!should_include_secret("FOO", &[], &exclude));
+        assert!(should_include_secret("BAR", &[], &exclude));
+    }
+
+    #[test]
+    fn test_should_include_with_both_filters() {
+        // Include API_* but exclude API_SECRET
+        let include = vec!["API_*".to_string()];
+        let exclude = vec!["API_SECRET".to_string()];
+
+        assert!(should_include_secret("API_KEY", &include, &exclude));
+        assert!(should_include_secret("API_URL", &include, &exclude));
+        assert!(!should_include_secret("API_SECRET", &include, &exclude)); // excluded
+        assert!(!should_include_secret("DATABASE_URL", &include, &exclude)); // not included
+    }
+
+    #[test]
+    fn test_multiple_patterns() {
+        let include = vec!["FOO*".to_string(), "BAR*".to_string()];
+        let exclude = vec!["*_SECRET".to_string()];
+
+        assert!(should_include_secret("FOO_KEY", &include, &exclude));
+        assert!(should_include_secret("BAR_URL", &include, &exclude));
+        assert!(!should_include_secret("FOO_SECRET", &include, &exclude)); // excluded
+        assert!(!should_include_secret("BAZ_KEY", &include, &exclude)); // not included
     }
 }

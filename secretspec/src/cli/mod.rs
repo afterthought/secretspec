@@ -113,6 +113,12 @@ enum Commands {
         /// Export as non-secret variables (Zuplo only: disables --is-secret flag)
         #[arg(long)]
         no_secret: bool,
+        /// Include only secrets matching pattern(s) (supports glob: FOO*, *BAR, *BAZ*)
+        #[arg(short, long, action = clap::ArgAction::Append)]
+        include: Vec<String>,
+        /// Exclude secrets matching pattern(s) (supports glob: FOO*, *BAR, *BAZ*)
+        #[arg(short, long, action = clap::ArgAction::Append)]
+        exclude: Vec<String>,
     },
 }
 
@@ -607,6 +613,8 @@ pub fn main() -> Result<()> {
             profile,
             force,
             no_secret,
+            include,
+            exclude,
         } => {
             let mut app = Secrets::load()
                 .into_diagnostic()
@@ -618,15 +626,25 @@ pub fn main() -> Result<()> {
                 app.set_profile(p);
             }
 
-            // If --no-secret flag is set, append query parameter to the provider URL
-            let target_provider = if no_secret {
-                if to_provider.contains('?') {
-                    format!("{}&is-secret=false", to_provider)
-                } else {
-                    format!("{}?is-secret=false", to_provider)
-                }
-            } else {
+            // Build query parameters from flags
+            let mut query_params = Vec::new();
+            if no_secret {
+                query_params.push("is-secret=false".to_string());
+            }
+            for pattern in &include {
+                query_params.push(format!("include={}", pattern));
+            }
+            for pattern in &exclude {
+                query_params.push(format!("exclude={}", pattern));
+            }
+
+            // Append query parameters to the provider URL
+            let target_provider = if query_params.is_empty() {
                 to_provider
+            } else if to_provider.contains('?') {
+                format!("{}&{}", to_provider, query_params.join("&"))
+            } else {
+                format!("{}?{}", to_provider, query_params.join("&"))
             };
 
             app.export(&target_provider, force)
