@@ -404,13 +404,17 @@ impl Provider for ZuploProvider {
 
         match self.execute_zuplo_command(&create_args_str) {
             Ok(_) => return Ok(()),
-            Err(SecretSpecError::ProviderOperationFailed(msg))
-                if msg.contains("already exists")
+            Err(SecretSpecError::ProviderOperationFailed(msg)) => {
+                eprintln!("[secretspec/zuplo] create failed for {key}; create stderr was: {msg}");
+                let is_conflict = msg.contains("already exists")
                     || msg.contains("duplicate")
                     || msg.contains("overlapping-targets")
-                    || msg.contains("overlaps with") =>
-            {
+                    || msg.contains("overlaps with");
+                if !is_conflict {
+                    return Err(SecretSpecError::ProviderOperationFailed(msg));
+                }
                 // Variable exists, try to update it
+                eprintln!("[secretspec/zuplo] conflict matched; falling back to update for {key}");
                 let update_args = self.build_args(
                     vec![
                         "variable".to_string(),
@@ -424,8 +428,16 @@ impl Provider for ZuploProvider {
                 );
 
                 let update_args_str: Vec<&str> = update_args.iter().map(|s| s.as_str()).collect();
-                self.execute_zuplo_command(&update_args_str)?;
-                Ok(())
+                match self.execute_zuplo_command(&update_args_str) {
+                    Ok(_) => Ok(()),
+                    Err(SecretSpecError::ProviderOperationFailed(update_msg)) => {
+                        eprintln!(
+                            "[secretspec/zuplo] update also failed for {key}; update stderr was: {update_msg}"
+                        );
+                        Err(SecretSpecError::ProviderOperationFailed(update_msg))
+                    }
+                    Err(e) => Err(e),
+                }
             }
             Err(e) => Err(e),
         }
