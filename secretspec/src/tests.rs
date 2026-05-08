@@ -3842,36 +3842,46 @@ fn test_export_between_dotenv_files() {
                 "SECRET_ONE".to_string(),
                 Secret {
                     description: Some("First test secret".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "SECRET_TWO".to_string(),
                 Secret {
                     description: Some("Second test secret".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "SECRET_THREE".to_string(),
                 Secret {
                     description: Some("Third test secret".to_string()),
-                    required: false,
+                    required: Some(false),
                     default: Some("default_value".to_string()),
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "SECRET_FOUR".to_string(),
                 Secret {
                     description: Some("Fourth test secret (not in source)".to_string()),
-                    required: false,
+                    required: Some(false),
                     default: None,
+                    ..Default::default()
                 },
             );
 
-            profiles.insert("default".to_string(), Profile { secrets });
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
             profiles
         },
     };
@@ -3893,6 +3903,7 @@ fn test_export_between_dotenv_files() {
         defaults: GlobalDefaults {
             provider: Some(format!("dotenv://{}", source_env_path.display())),
             profile: Some("default".to_string()),
+            providers: None,
         },
     };
 
@@ -3964,20 +3975,28 @@ fn test_export_with_force() {
                 "SECRET_ONE".to_string(),
                 Secret {
                     description: Some("First test secret".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "SECRET_TWO".to_string(),
                 Secret {
                     description: Some("Second test secret".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
 
-            profiles.insert("default".to_string(), Profile { secrets });
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
             profiles
         },
     };
@@ -4003,6 +4022,7 @@ fn test_export_with_force() {
         defaults: GlobalDefaults {
             provider: Some(format!("dotenv://{}", source_env_path.display())),
             profile: Some("default".to_string()),
+            providers: None,
         },
     };
 
@@ -4062,28 +4082,37 @@ fn test_export_edge_cases() {
                 "EMPTY_VALUE".to_string(),
                 Secret {
                     description: Some("Secret with empty value".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "SPECIAL_CHARS".to_string(),
                 Secret {
                     description: Some("Secret with special characters".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
             secrets.insert(
                 "MULTILINE".to_string(),
                 Secret {
                     description: Some("Secret with multiline value".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
 
-            profiles.insert("default".to_string(), Profile { secrets });
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
             profiles
         },
     };
@@ -4109,6 +4138,7 @@ fn test_export_edge_cases() {
         defaults: GlobalDefaults {
             provider: Some(format!("dotenv://{}", source_env_path.display())),
             profile: Some("default".to_string()),
+            providers: None,
         },
     };
 
@@ -4176,12 +4206,19 @@ fn test_export_to_readonly_provider() {
                 "SECRET_ONE".to_string(),
                 Secret {
                     description: Some("Test secret".to_string()),
-                    required: true,
+                    required: Some(true),
                     default: None,
+                    ..Default::default()
                 },
             );
 
-            profiles.insert("default".to_string(), Profile { secrets });
+            profiles.insert(
+                "default".to_string(),
+                Profile {
+                    defaults: None,
+                    secrets,
+                },
+            );
             profiles
         },
     };
@@ -4195,6 +4232,7 @@ fn test_export_to_readonly_provider() {
         defaults: GlobalDefaults {
             provider: Some(format!("dotenv://{}", source_env_path.display())),
             profile: Some("default".to_string()),
+            providers: None,
         },
     };
 

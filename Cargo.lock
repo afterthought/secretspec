@@ -2451,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "secretspec"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "aws-config",
  "aws-sdk-secretsmanager",
@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "secretspec-derive"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "http 1.4.0",
  "insta",

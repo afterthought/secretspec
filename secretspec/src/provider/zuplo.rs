@@ -316,6 +316,18 @@ impl Provider for ZuploProvider {
         Self::PROVIDER_NAME
     }
 
+    fn uri(&self) -> String {
+        let mut uri = "zuplo://".to_string();
+        if let Some(ref project) = self.config.project {
+            uri.push_str(project);
+            if let Some(ref branch) = self.config.branch {
+                uri.push('/');
+                uri.push_str(branch);
+            }
+        }
+        uri
+    }
+
     /// Attempts to read a variable from Zuplo.
     ///
     /// **Note**: This method always returns an error because the Zuplo CLI
@@ -393,7 +405,10 @@ impl Provider for ZuploProvider {
         match self.execute_zuplo_command(&create_args_str) {
             Ok(_) => return Ok(()),
             Err(SecretSpecError::ProviderOperationFailed(msg))
-                if msg.contains("already exists") || msg.contains("duplicate") =>
+                if msg.contains("already exists")
+                    || msg.contains("duplicate")
+                    || msg.contains("overlapping-targets")
+                    || msg.contains("overlaps with") =>
             {
                 // Variable exists, try to update it
                 let update_args = self.build_args(
